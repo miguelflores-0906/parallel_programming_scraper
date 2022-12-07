@@ -39,7 +39,9 @@ class producer(multiprocessing.Process):
         wd = webdriver.Edge(PATH)
         wd.get(URL)
 
-        time.sleep(10)
+        time.sleep(20)
+
+        scraped = []
 
         while True:
 
@@ -48,18 +50,28 @@ class producer(multiprocessing.Process):
 
             # find button with onClick = "personnelLoadMoreAction()"
             try:
+                not_scraped = []
                 button = wd.find_element(By.XPATH, "//button[@onclick='personnelLoadMoreAction()']")
                 print(button)
                 person = wd.find_elements(By.NAME, "personnel")
                 print(len(person))
-
                 for p in person:
-                    if p.get_attribute('value') not in self.queue:
-                        self.queue.put(p.get_attribute('value'))
+                    if p not in scraped:
+                        scraped.append(p)
+                        not_scraped.append(p)
+
+                for p in not_scraped:
+                    personnel_id = p.get_attribute('value')
+                    print(personnel_id)
+                    if personnel_id:
+                        print("It exists")
+                        self.queue.put(personnel_id)
+                        print(personnel_id)
 
                 button.click()
                 time.sleep(10)
-            except:
+            except Exception as e:
+                print(e)
                 print("cannot find button")
                 break
         self.queue.put(None)
@@ -78,7 +90,8 @@ class consumer(multiprocessing.Process):
         self.thread_id = thread_id
     def run(self):
         print("Doing the consumer task")
-        time.sleep(15)
+        time.sleep(25)
+        print("Consumer: Starting loop")
         while True:
             personnel_id = self.queue.get() #queue.get()
             if personnel_id == None:
@@ -167,20 +180,24 @@ def consumer_task(buffer):
     
 # lock = multiprocessing.Lock()
 
-buffer = multiprocessing.Queue()
+def main():
+    buffer = multiprocessing.Queue()
 
-num_consumers = 4
+    num_consumers = 4
 
-p = producer(buffer, 1)
-print(p)
-p.start()
+    p = producer(buffer, 1)
+    print(p)
+    p.start()
 
-consumers = []
-for i in range(num_consumers):
-    c = consumer(buffer, i)
-    consumers.append(c)
-    c.start()
+    consumers = []
+    for i in range(num_consumers):
+        c = consumer(buffer, i)
+        consumers.append(c)
+        c.start()
 
-p.join()
-for c in consumers:
-    c.join()
+    p.join()
+    for c in consumers:
+        c.join()
+
+if __name__ == '__main__':
+    main()
