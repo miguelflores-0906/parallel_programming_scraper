@@ -8,11 +8,13 @@ from bs4 import BeautifulSoup
 import codecs
 import re
 import requests
+import PySimpleGUI as sg
 # from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 import time
 import queue
 import os
+import sys
 
 # Threading and Multiprocessing Libraries
 import multiprocessing
@@ -85,10 +87,12 @@ class producer(multiprocessing.Process):
         wd.close()
 
 class consumer(multiprocessing.Process):
-    def __init__(self, buffer, lock, thread_id = 1):
+    def __init__(self, buffer, lock, p_counter, e_counter, thread_id = 1):
         multiprocessing.Process.__init__(self)
         self.queue = buffer
         self.thread_id = thread_id
+        self.p_counter = p_counter
+        self.e_counter = e_counter
         self.lock = lock
     def run(self):
         print("Doing the consumer task")
@@ -96,6 +100,9 @@ class consumer(multiprocessing.Process):
         print("Consumer: Starting loop")
         while True:
             personnel_id = self.queue.get() #queue.get()
+            self.lock.acquire()
+            self.p_counter.value += 1
+            self.lock.release()
             if personnel_id == None:
                 break
             # wd = webdriver.Edge(URL + '?personnel=' + personnel_id)
@@ -124,6 +131,7 @@ class consumer(multiprocessing.Process):
             # check if email.csv exists
             # if not, create it
             # if yes, append to it
+            self.e_counter.value += 1
             with open('data.csv', 'a') as f:
                 f.write(f'{name},{department},{position},{email}\n')
             # close file
@@ -146,45 +154,133 @@ def scroll(wd, delay):
     time.sleep(delay)
 
 def main():
-    buffer = multiprocessing.Queue()
-    # info = multiprocessing.Queue()
-    lock = multiprocessing.Lock()
+    sg.theme('DarkTeal9')
+    layout = [
+        [sg.Text("E-mail Web Scraper")],
+        [sg.Text("Enter URL:"), sg.InputText()],
+        [sg.Text("Enter Time to Scrape:"), sg.InputText()],
+        [sg.Text("Enter Number of Threads(Optional):"), sg.InputText()],
+        [sg.Button("Start"), sg.Button("Exit")]
+    ]
 
-    num_consumers = 6
+    window = sg.Window("E-mail Web Scraper", layout)
+    while True:
+        event, values = window.read()
+        if event == sg.WIN_CLOSED or event == "Exit":
+            break
+        
+        if values[0] == "" or values[1] == "":
+            sg.popup("Please enter a URL and time to scrape")
+        else:
+            if values[2] == "":
+                buffer = multiprocessing.Queue()
+                # info = multiprocessing.Queue()
+                lock = multiprocessing.Lock()
 
-    num_emails = 0
-    
-    # if data.csv exists, delete it
-    if os.path.exists('data.csv'):
-        os.remove('data.csv')
-    # create data.csv
-    with open('data.csv', 'w') as f:
-        f.write('LastName,FirstName,Department,Position,Email\n')
+                num_consumers = 4
+                manager=multiprocessing.Manager()
+                page_counter =manager.Value('i',0)
+                email_counter = manager.Value('i',0)
 
-    p = producer(buffer, 1)
-    print(p)
-    p.start()
+                num_emails = 0
+                
+                # if data.csv exists, delete it
+                if os.path.exists('data.csv'):
+                    os.remove('data.csv')
+                # create data.csv
+                with open('data.csv', 'w') as f:
+                    f.write('LastName,FirstName,Department,Position,Email\n')
 
-    consumers = []
-    for i in range(num_consumers):
-        c = consumer(buffer, lock, i)
-        consumers.append(c)
-        c.start()
+                p = producer(buffer, 1)
+                print(p)
+                p.start()
 
-    # print the current time
-    print(time.strftime("%H:%M:%S", time.localtime()))
-    print("Start")
-    time.sleep(300)
-    print("End")
-    print(time.strftime("%H:%M:%S", time.localtime()))
-    p.terminate()
-    for c in consumers:
-        c.terminate()
+                consumers = []
+                for i in range(num_consumers):
+                    c = consumer(buffer, lock, page_counter, email_counter, i)
+                    consumers.append(c)
+                    c.start()
 
-    p.join()
-    for c in consumers:
-        c.join()
-    
+                # print the current time
+                print(time.strftime("%H:%M:%S", time.localtime()))
+                print("Start")
+                time.sleep(int(values[1]) * 60)
+                print("End")
+                print(time.strftime("%H:%M:%S", time.localtime()))
+                p.terminate()
+                for c in consumers:
+                    c.terminate()
+
+                p.join()
+                for c in consumers:
+                    c.join()
+
+                print(page_counter.value)
+                print(email_counter.value)
+
+                # if stat.txt exists, delete it
+                if os.path.exists('stat.txt'):
+                    os.remove('stat.txt')
+                # create stat.txt
+                with open('stat.txt', 'w') as f:
+                    f.write(f'URL scraped: {URL}\n')
+                    f.write(f'Number of pages scraped: {page_counter.value}\n')
+                    f.write(f'Number of emails scraped: {email_counter.value}\n')
+                sys.exit(0)
+            else:
+                buffer = multiprocessing.Queue()
+                # info = multiprocessing.Queue()
+                lock = multiprocessing.Lock()
+
+                num_consumers = int(values[2])
+                manager=multiprocessing.Manager()
+                page_counter =manager.Value('i',0)
+                email_counter = manager.Value('i',0)
+
+                num_emails = 0
+                
+                # if data.csv exists, delete it
+                if os.path.exists('data.csv'):
+                    os.remove('data.csv')
+                # create data.csv
+                with open('data.csv', 'w') as f:
+                    f.write('LastName,FirstName,Department,Position,Email\n')
+
+                p = producer(buffer, 1)
+                print(p)
+                p.start()
+
+                consumers = []
+                for i in range(num_consumers):
+                    c = consumer(buffer, lock, page_counter, email_counter, i)
+                    consumers.append(c)
+                    c.start()
+
+                # print the current time
+                print(time.strftime("%H:%M:%S", time.localtime()))
+                print("Start")
+                time.sleep(int(values[1]) * 60)
+                print("End")
+                print(time.strftime("%H:%M:%S", time.localtime()))
+                p.terminate()
+                for c in consumers:
+                    c.terminate()
+
+                p.join()
+                for c in consumers:
+                    c.join()
+
+                print(page_counter.value)
+                print(email_counter.value)
+                # if stat.txt exists, delete it
+                if os.path.exists('stat.txt'):
+                    os.remove('stat.txt')
+                # create stat.txt
+                with open('stat.txt', 'w') as f:
+                    f.write(f'URL scraped: {URL}\n')
+                    f.write(f'Number of pages scraped: {page_counter.value}\n')
+                    f.write(f'Number of emails scraped: {email_counter.value}\n')
+                sys.exit(0)
 
 if __name__ == '__main__':
     main()
