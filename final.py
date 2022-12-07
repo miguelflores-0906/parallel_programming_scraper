@@ -85,11 +85,10 @@ class producer(multiprocessing.Process):
         wd.close()
 
 class consumer(multiprocessing.Process):
-    def __init__(self, buffer, lock, counter, thread_id = 1):
+    def __init__(self, buffer, lock, thread_id = 1):
         multiprocessing.Process.__init__(self)
         self.queue = buffer
         self.thread_id = thread_id
-        self.counter = counter
         self.lock = lock
     def run(self):
         print("Doing the consumer task")
@@ -112,6 +111,8 @@ class consumer(multiprocessing.Process):
 
             try:
                 email_button = wd.find_element(By.CSS_SELECTOR, '.btn.btn-sm.btn-block.text-capitalize')
+
+                # if email_button.get_attribute('href') and re.match(r'^mailto:[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$', email_button.get_attribute('href')):
                 email = email_button.get_attribute('href')[7:]
             except:
                 print("No email")
@@ -125,7 +126,6 @@ class consumer(multiprocessing.Process):
             # if yes, append to it
             with open('data.csv', 'a') as f:
                 f.write(f'{name},{department},{position},{email}\n')
-            self.counter.value += 1
             # close file
             self.lock.release()
             wd.close()
@@ -145,75 +145,12 @@ def scroll(wd, delay):
     wd.execute_script("window.scrollTo(0, document.body.scrollHeight);")
     time.sleep(delay)
 
-def producer_task(buffer):
-
-    wd = webdriver.Edge(PATH)
-    wd.get(URL)
-
-    time.sleep(10)
-
-    while True:
-
-        scroll(wd, 2)
-        scroll(wd, 2)
-
-        # find button with onClick = "personnelLoadMoreAction()"
-        try:
-            button = wd.find_element(By.XPATH, "//button[@onclick='personnelLoadMoreAction()']")
-            print(button)
-            person = wd.find_elements(By.NAME, "personnel")
-            print(len(person))
-
-            for p in person:
-                if p.get_attribute('value') not in buffer:
-                    buffer.put(p.get_attribute('value'))
-
-            button.click()
-            time.sleep(10)
-        except:
-            print("cannot find button")
-            break
-    buffer.put(None)
-    buffer.put(None)
-    buffer.put(None)
-    buffer.put(None)
-    buffer.put(None)
-    # get the value attribute of each personnel
-
-    wd.close()
-
-def consumer_task(buffer):
-    # wd = webdriver.Chrome(service = SERVICE, options = OPTIONS)
-    time.sleep(15)
-    while True:
-        personnel_id = buffer.get() #queue.get()
-        if personnel_id == None:
-            break
-        # wd = webdriver.Edge(URL + '?personnel=' + personnel_id)
-        wd = webdriver.Edge(PATH)
-        wd.get(f'{URL}?personnel={personnel_id}')
-
-
-        name = wd.find_element(By.TAG_NAME, 'h3').get_attribute('innerHTML')
-
-        dept_info = wd.find_element(By.CLASS_NAME, 'list-unstyled.text-capitalize.text-center').find_elements(By.TAG_NAME,'li')
-        position = dept_info[0].get_attribute('innerHTML')[6:-7]
-        department = dept_info[1].get_attribute('innerHTML')[6:-7]
-
-        email_button = wd.find_element(By.CSS_SELECTOR, '.btn.btn-sm.btn-block.text-capitalize')
-        email = email_button.get_attribute('href')[7:]
-
-        print([name, department, position, email])
-
-        wd.close()
-    
-
 def main():
     buffer = multiprocessing.Queue()
     # info = multiprocessing.Queue()
     lock = multiprocessing.Lock()
 
-    num_consumers = 4
+    num_consumers = 6
 
     num_emails = 0
     
@@ -230,13 +167,24 @@ def main():
 
     consumers = []
     for i in range(num_consumers):
-        c = consumer(buffer, lock, num_emails, i)
+        c = consumer(buffer, lock, i)
         consumers.append(c)
         c.start()
+
+    # print the current time
+    print(time.strftime("%H:%M:%S", time.localtime()))
+    print("Start")
+    time.sleep(300)
+    print("End")
+    print(time.strftime("%H:%M:%S", time.localtime()))
+    p.terminate()
+    for c in consumers:
+        c.terminate()
 
     p.join()
     for c in consumers:
         c.join()
+    
 
 if __name__ == '__main__':
     main()
