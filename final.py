@@ -12,6 +12,7 @@ import requests
 from selenium.webdriver.common.by import By
 import time
 import queue
+import os
 
 # Threading and Multiprocessing Libraries
 import multiprocessing
@@ -45,8 +46,8 @@ class producer(multiprocessing.Process):
 
         while True:
 
-            scroll(wd, 2)
-            scroll(wd, 2)
+            scroll(wd, 5)
+            scroll(wd, 5)
 
             # find button with onClick = "personnelLoadMoreAction()"
             try:
@@ -67,9 +68,9 @@ class producer(multiprocessing.Process):
                         print("It exists")
                         self.queue.put(personnel_id)
                         print(personnel_id)
-
+                time.sleep(15)
                 button.click()
-                time.sleep(10)
+                time.sleep(20)
             except Exception as e:
                 print(e)
                 print("cannot find button")
@@ -84,10 +85,12 @@ class producer(multiprocessing.Process):
         wd.close()
 
 class consumer(multiprocessing.Process):
-    def __init__(self, buffer, thread_id = 1):
+    def __init__(self, buffer, lock, counter, thread_id = 1):
         multiprocessing.Process.__init__(self)
         self.queue = buffer
         self.thread_id = thread_id
+        self.counter = counter
+        self.lock = lock
     def run(self):
         print("Doing the consumer task")
         time.sleep(25)
@@ -107,11 +110,36 @@ class consumer(multiprocessing.Process):
             position = dept_info[0].get_attribute('innerHTML')[6:-7]
             department = dept_info[1].get_attribute('innerHTML')[6:-7]
 
-            email_button = wd.find_element(By.CSS_SELECTOR, '.btn.btn-sm.btn-block.text-capitalize')
-            email = email_button.get_attribute('href')[7:]
+            try:
+                email_button = wd.find_element(By.CSS_SELECTOR, '.btn.btn-sm.btn-block.text-capitalize')
+                email = email_button.get_attribute('href')[7:]
+            except:
+                print("No email")
+                continue
 
             print([name, department, position, email])
+            self.lock.acquire()
+            # write to csv file
+            # check if email.csv exists
+            # if not, create it
+            # if yes, append to it
+            with open('data.csv', 'a') as f:
+                f.write(f'{name},{department},{position},{email}\n')
+            self.counter.value += 1
+            # close file
+            self.lock.release()
             wd.close()
+
+# class writer(multiprocessing.Process):
+#     def __init__(self, buffer, thread_id = 1):
+#         multiprocessing.Process.__init__(self)
+#         self.queue = buffer
+#         self.thread_id = thread_id
+#     def run(self):
+#         print("Doing the writer task")
+#         time.sleep(30)
+#         with open('data.csv', 'w') as f:
+#             f.write('Name,Department,Position,Email')
 
 def scroll(wd, delay):
     wd.execute_script("window.scrollTo(0, document.body.scrollHeight);")
@@ -176,14 +204,25 @@ def consumer_task(buffer):
         email = email_button.get_attribute('href')[7:]
 
         print([name, department, position, email])
+
         wd.close()
     
-# lock = multiprocessing.Lock()
 
 def main():
     buffer = multiprocessing.Queue()
+    # info = multiprocessing.Queue()
+    lock = multiprocessing.Lock()
 
     num_consumers = 4
+
+    num_emails = 0
+    
+    # if data.csv exists, delete it
+    if os.path.exists('data.csv'):
+        os.remove('data.csv')
+    # create data.csv
+    with open('data.csv', 'w') as f:
+        f.write('LastName,FirstName,Department,Position,Email\n')
 
     p = producer(buffer, 1)
     print(p)
@@ -191,7 +230,7 @@ def main():
 
     consumers = []
     for i in range(num_consumers):
-        c = consumer(buffer, i)
+        c = consumer(buffer, lock, num_emails, i)
         consumers.append(c)
         c.start()
 
