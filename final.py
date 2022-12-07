@@ -59,6 +59,24 @@ def producer():
 
     wd.close()
 
+def consumer():
+    wd = webdriver.Chrome(service = SERVICE, options = OPTIONS)
+    personnel_id = val_queue.pop(0) #queue.get()
+    wd = webdriver.Edge(URL + '?personnel=' + personnel_id)
+
+
+    name = wd.find_element(By.TAG_NAME, 'h3').get_attribute('innerHTML')
+
+    dept_info = wd.find_element(By.CLASS_NAME, 'list-unstyled.text-capitalize.text-center').find_elements(By.TAG_NAME,'li')
+    position = dept_info[0].get_attribute('innerHTML')[6:-7]
+    department = dept_info[1].get_attribute('innerHTML')[6:-7]
+
+    email_button = wd.find_element(By.CSS_SELECTOR, '.btn.btn-sm.btn-block.text-capitalize')
+    email = email_button.get_attribute('href')[7:]
+
+    print([name, department, position, email])
+    
+    
 
 val_queue = []
 
