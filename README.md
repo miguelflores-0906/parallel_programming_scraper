@@ -13,3 +13,5 @@
 2. Enter URL to be scraped, time of scraping in minutes, and optionally, the number of threads for scraping.
 3. Once the time is over, force close the program in the terminal using 'Ctrl + C' to get rid of the open webdrivers.
 4. data.csv will contain the e-mails scraped and stat.txt will contain the URL that was scraped, number of pages scraped, and the number of e-mails scraped.
+
+Alternatively, you can follow the demo video in the repository.
